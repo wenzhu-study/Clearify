@@ -94,3 +94,9 @@ npm run test:server # 单独运行服务端解析和网络访问验证测试
 字体为 DM Sans（SIL Open Font License，见 `public/fonts/OFL.txt`），图标使用 Lucide。
 
 `public/videos/sample.mp4` 由上述三张示例照片合成为 6 秒视频，用于展示与测试实际截帧流程，无需外部视频服务。
+
+界面展示：
+![展示图1](image/Snipaste_2026-09-30_16-23-22.png)
+![展示图2](image/Snipaste_2026-09-30_16-23-42.png)
+![展示图3](image/Snipaste_2026-09-30_16-23-54.png)
+![展示图4](image/Snipaste_2026-09-30_16-24-03.png)
