@@ -11,6 +11,7 @@ import {
   Download,
   Expand,
   FileImage,
+  Film,
   FolderHeart,
   Image as ImageIcon,
   Leaf,
@@ -31,6 +32,9 @@ import type { EnhanceMode, OutputFormat, SavedImage, SourceImage } from './types
 import { downloadImage, formatBytes, outputSize } from './types'
 import { deleteImage, getHistory, saveImage } from './storage'
 import Comparison from './Comparison'
+import VideoExtractor from './VideoExtractor'
+
+type Page = 'enhance' | 'video' | 'history'
 
 const samples = [
   {
@@ -187,6 +191,16 @@ const faqs = [
       '日常照片、社交分享建议先选 2×，处理更快。尺寸较小的图片、需要更大输出的场景可以选择 4×。「自然」模式保留柔和质感；「细节」模式会加强轮廓。噪点较多时建议开启轻柔降噪。',
   },
   {
+    question: '视频提图支持哪些分享链接？',
+    answer:
+      '可以读取公开的 MP4 / WebM 视频直链，以及可公开访问的图文分享页面。抖音图集会自动读取动态加载的数据，按作品顺序提取图片；普通视频则按设置截取画面。遇到暂时读取失败可以重新尝试，单次失败不代表作品需要登录。私密或已删除的内容无法提取。',
+  },
+  {
+    question: '视频提取的数量和隐私是怎样的？',
+    answer:
+      '视频支持 100 MB、30 分钟以内的文件，可选 6 / 12 / 24 / 36 张截图。自动去重会跳过相似画面，数量可能少于设置值；等距截图更适合按时间查看。图文作品保留原图格式，最多 60 张。分享链接由网站服务读取，媒体在服务内存中临时缓存，链接约 15 分钟过期；本地视频只在你的浏览器内处理。提取结果在刷新页面后会清除，请及时下载。',
+  },
+  {
     question: '下载会收费或添加水印吗？',
     answer:
       '不会。所有增强和下载功能均可免费使用，无需注册，不添加水印。PNG 保留透明背景且无损保存；JPG 文件更小，但透明区域会变为白色；WebP 兼顾体积与透明背景。请及时下载你希望长期保留的图片。',
@@ -194,7 +208,7 @@ const faqs = [
 ]
 
 export default function App() {
-  const [page, setPage] = useState<'enhance' | 'history'>('enhance')
+  const [page, setPage] = useState<Page>('enhance')
   const [modal, setModal] = useState<'guide' | 'faq' | 'preview' | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [source, setSource] = useState<SourceImage | null>(null)
@@ -313,7 +327,7 @@ export default function App() {
 
   useEffect(() => {
     const paste = (event: ClipboardEvent) => {
-      if (modal || isProcessing || isLoading) return
+      if (page !== 'enhance' || modal || isProcessing || isLoading) return
       const image = Array.from(event.clipboardData?.files ?? []).find((file) =>
         file.type.startsWith('image/'),
       )
@@ -324,7 +338,7 @@ export default function App() {
     }
     window.addEventListener('paste', paste)
     return () => window.removeEventListener('paste', paste)
-  }, [loadFile, modal, isProcessing, isLoading])
+  }, [loadFile, modal, isProcessing, isLoading, page])
 
   const enhance = () => {
     if (!source) {
@@ -421,7 +435,7 @@ export default function App() {
     setView('compare')
     setIsLoading(false)
   }
-  const switchPage = (next: 'enhance' | 'history') => {
+  const switchPage = (next: Page) => {
     setPage(next)
     setMobileMenu(false)
   }
@@ -510,6 +524,13 @@ export default function App() {
             <span className="nav-active-dot" />
           </button>
           <button
+            className={`nav-item ${page === 'video' ? 'active' : ''}`}
+            onClick={() => switchPage('video')}
+          >
+            <Film size={19} />
+            <span>视频提图</span>
+          </button>
+          <button
             className={`nav-item ${page === 'history' ? 'active' : ''}`}
             onClick={() => switchPage('history')}
           >
@@ -546,7 +567,7 @@ export default function App() {
 
       <div className="main-shell">
         <main
-          className={`main-content studio-content ${page === 'enhance' ? 'enhance-content' : 'history-content'}`}
+          className={`main-content studio-content ${page === 'enhance' ? 'enhance-content' : page === 'video' ? 'video-content' : 'history-content'}`}
         >
           <div className="studio-heading">
             <button
@@ -557,11 +578,15 @@ export default function App() {
               <Menu size={21} />
             </button>
             <div className="studio-heading-text">
-              <h1>{page === 'enhance' ? '图片高清增强' : '我的作品'}</h1>
+              <h1>
+                {page === 'enhance' ? '图片高清增强' : page === 'video' ? '视频提图' : '我的作品'}
+              </h1>
               <p>
                 {page === 'enhance'
                   ? '让每一处细节，都清晰出彩。'
-                  : '那些值得保留的细节，都在这里。'}
+                  : page === 'video'
+                    ? '让流动的瞬间，成为可以珍藏的画面。'
+                    : '那些值得保留的细节，都在这里。'}
               </p>
             </div>
             {page === 'enhance' && (
@@ -937,7 +962,7 @@ export default function App() {
                 </div>
               </section>
             </>
-          ) : (
+          ) : page === 'history' ? (
             <>
               <div className="history-toolbar">
                 <h2>
@@ -993,13 +1018,26 @@ export default function App() {
                 </p>
               )}
             </>
-          )}
+          ) : null}
+          <div className="video-page" hidden={page !== 'video'}>
+            <VideoExtractor
+              onEnhance={(blob, name) => {
+                if (isProcessing || isLoading) {
+                  setToast('请等待当前图片增强完成后再导入')
+                  return
+                }
+                void loadFile(blob, name)
+              }}
+            />
+          </div>
           <footer className="footer">
             <span>© {new Date().getFullYear()} Clearify</span>
             <span>
               {page === 'enhance'
                 ? '拖动竖线比较 · 放大后拖动画面查看细节'
-                : '作品保存在当前浏览器中'}
+                : page === 'video'
+                  ? '把值得留住的画面，自由带走'
+                  : '作品保存在当前浏览器中'}
             </span>
           </footer>
         </main>
