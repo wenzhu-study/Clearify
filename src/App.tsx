@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ArrowRight,
@@ -11,6 +11,7 @@ import {
   Download,
   Expand,
   FileImage,
+  FileText,
   Film,
   FolderHeart,
   Image as ImageIcon,
@@ -34,7 +35,9 @@ import { deleteImage, getHistory, saveImage } from './storage'
 import Comparison from './Comparison'
 import VideoExtractor from './VideoExtractor'
 
-type Page = 'enhance' | 'video' | 'history'
+const PdfEnhancer = lazy(() => import('./PdfEnhancer'))
+
+type Page = 'enhance' | 'video' | 'pdf' | 'history'
 
 const samples = [
   {
@@ -176,6 +179,11 @@ const faqs = [
       'Clearify 使用高质量 Lanczos 重采样、边缘锐化和可选的轻柔降噪，在放大图片的同时改善细节观感。处理完全在浏览器内完成，不需要 API 密钥。它不会凭空生成已经丢失的细节，严重模糊的照片改善幅度有限。首页风景对比为效果示意；上传并处理后的对比展示你的实际结果。',
   },
   {
+    question: 'PDF 清晰化会把文字变成图片吗？',
+    answer:
+      '默认的「智能保留文字」会保留可选择的矢量文字，只对扫描页提高清晰度。选择「全部增强」会把每页转为高清页面图像，这时文字不再可复制或搜索。PDF 处理只在浏览器内完成；已经严重失焦或缺失的笔画无法凭空还原。',
+  },
+  {
     question: '我的照片会被上传或保存到服务器吗？',
     answer:
       '不会。你选择的照片只在当前设备的浏览器内处理。最近的 12 张作品会保存在本地浏览器中（总容量上限约 120 MB），方便再次下载；超出上限时会自动移除较早的记录，你也可以在「我的作品」中删除。清理浏览器站点数据会一并清除这些记录。',
@@ -209,6 +217,7 @@ const faqs = [
 
 export default function App() {
   const [page, setPage] = useState<Page>('enhance')
+  const [pdfVisited, setPdfVisited] = useState(false)
   const [modal, setModal] = useState<'guide' | 'faq' | 'preview' | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [source, setSource] = useState<SourceImage | null>(null)
@@ -436,6 +445,7 @@ export default function App() {
     setIsLoading(false)
   }
   const switchPage = (next: Page) => {
+    if (next === 'pdf') setPdfVisited(true)
     setPage(next)
     setMobileMenu(false)
   }
@@ -531,6 +541,13 @@ export default function App() {
             <span>视频提图</span>
           </button>
           <button
+            className={`nav-item ${page === 'pdf' ? 'active' : ''}`}
+            onClick={() => switchPage('pdf')}
+          >
+            <FileText size={19} />
+            <span>PDF 清晰</span>
+          </button>
+          <button
             className={`nav-item ${page === 'history' ? 'active' : ''}`}
             onClick={() => switchPage('history')}
           >
@@ -567,7 +584,7 @@ export default function App() {
 
       <div className="main-shell">
         <main
-          className={`main-content studio-content ${page === 'enhance' ? 'enhance-content' : page === 'video' ? 'video-content' : 'history-content'}`}
+          className={`main-content studio-content ${page === 'enhance' ? 'enhance-content' : page === 'video' ? 'video-content' : page === 'pdf' ? 'pdf-content' : 'history-content'}`}
         >
           <div className="studio-heading">
             <button
@@ -579,14 +596,22 @@ export default function App() {
             </button>
             <div className="studio-heading-text">
               <h1>
-                {page === 'enhance' ? '图片高清增强' : page === 'video' ? '视频提图' : '我的作品'}
+                {page === 'enhance'
+                  ? '图片高清增强'
+                  : page === 'video'
+                    ? '视频提图'
+                    : page === 'pdf'
+                      ? 'PDF 一键清晰'
+                      : '我的作品'}
               </h1>
               <p>
                 {page === 'enhance'
                   ? '让每一处细节，都清晰出彩。'
                   : page === 'video'
                     ? '让流动的瞬间，成为可以珍藏的画面。'
-                    : '那些值得保留的细节，都在这里。'}
+                    : page === 'pdf'
+                      ? '上传 A4 文档，让谱线和小字清楚易读。'
+                      : '那些值得保留的细节，都在这里。'}
               </p>
             </div>
             {page === 'enhance' && (
@@ -1030,6 +1055,20 @@ export default function App() {
               }}
             />
           </div>
+          <div className="pdf-page" hidden={page !== 'pdf'}>
+            {pdfVisited && (
+              <Suspense
+                fallback={
+                  <div className="pdf-loading">
+                    <LoaderCircle size={20} className="spin" />
+                    正在打开 PDF 工作台…
+                  </div>
+                }
+              >
+                <PdfEnhancer />
+              </Suspense>
+            )}
+          </div>
           <footer className="footer">
             <span>© {new Date().getFullYear()} Clearify</span>
             <span>
@@ -1037,7 +1076,9 @@ export default function App() {
                 ? '拖动竖线比较 · 放大后拖动画面查看细节'
                 : page === 'video'
                   ? '把值得留住的画面，自由带走'
-                  : '作品保存在当前浏览器中'}
+                  : page === 'pdf'
+                    ? '文档只在浏览器中处理 · 下载后留在你的设备上'
+                    : '作品保存在当前浏览器中'}
             </span>
           </footer>
         </main>

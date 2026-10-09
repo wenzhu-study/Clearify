@@ -4,6 +4,7 @@ import App from './App'
 import './styles.css'
 import './studio.css'
 import './video.css'
+import './pdf.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
